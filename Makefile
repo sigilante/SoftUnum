@@ -4,7 +4,7 @@
 CC ?= cc
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Iinclude
 
-SRCS = src/posit/p8.c
+SRCS = src/posit/p8.c src/posit/p16.c src/posit/p32.c
 OBJS = $(SRCS:.c=.o)
 
 UNAME_S := $(shell uname -s)

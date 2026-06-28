@@ -83,4 +83,53 @@ int      p8_to_i64(posit8_t a, int64_t *out);  //  posit -> int; 0 if NaR (none)
 //  product (single rounding).  Vectors are right-justified posit patterns.
 posit8_t p8_fdp(const posit8_t *av, const posit8_t *bv, int64_t len);
 
+//  =====================================================================
+//  posit16 (posit<16,2>)  and  posit32 (posit<32,2>)
+//  =====================================================================
+//  Identical surface to posit8, generated from the shared generic core.
+
+posit16_t p16_neg(posit16_t a);
+posit16_t p16_abs(posit16_t a);
+posit16_t p16_sgn(posit16_t a);
+int       p16_eq(posit16_t a, posit16_t b);
+int       p16_lt(posit16_t a, posit16_t b);
+int       p16_le(posit16_t a, posit16_t b);
+int       p16_gt(posit16_t a, posit16_t b);
+int       p16_ge(posit16_t a, posit16_t b);
+posit16_t p16_add(posit16_t a, posit16_t b);
+posit16_t p16_sub(posit16_t a, posit16_t b);
+posit16_t p16_mul(posit16_t a, posit16_t b);
+posit16_t p16_div(posit16_t a, posit16_t b);
+posit16_t p16_fma(posit16_t a, posit16_t b, posit16_t c);
+posit16_t p16_sqrt(posit16_t a);
+posit16_t p16_nearest_int(posit16_t a);
+posit16_t p16_floor(posit16_t a);
+posit16_t p16_ceil(posit16_t a);
+posit16_t p16_from_u64(uint64_t v);
+posit16_t p16_from_i64(int64_t v);
+int       p16_to_i64(posit16_t a, int64_t *out);
+posit16_t p16_fdp(const posit16_t *av, const posit16_t *bv, int64_t len);
+
+posit32_t p32_neg(posit32_t a);
+posit32_t p32_abs(posit32_t a);
+posit32_t p32_sgn(posit32_t a);
+int       p32_eq(posit32_t a, posit32_t b);
+int       p32_lt(posit32_t a, posit32_t b);
+int       p32_le(posit32_t a, posit32_t b);
+int       p32_gt(posit32_t a, posit32_t b);
+int       p32_ge(posit32_t a, posit32_t b);
+posit32_t p32_add(posit32_t a, posit32_t b);
+posit32_t p32_sub(posit32_t a, posit32_t b);
+posit32_t p32_mul(posit32_t a, posit32_t b);
+posit32_t p32_div(posit32_t a, posit32_t b);
+posit32_t p32_fma(posit32_t a, posit32_t b, posit32_t c);
+posit32_t p32_sqrt(posit32_t a);
+posit32_t p32_nearest_int(posit32_t a);
+posit32_t p32_floor(posit32_t a);
+posit32_t p32_ceil(posit32_t a);
+posit32_t p32_from_u64(uint64_t v);
+posit32_t p32_from_i64(int64_t v);
+int       p32_to_i64(posit32_t a, int64_t *out);
+posit32_t p32_fdp(const posit32_t *av, const posit32_t *bv, int64_t len);
+
 #endif  //  SOFTUNUM_H

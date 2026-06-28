@@ -9,11 +9,16 @@ SoftUnum is a companion to [SoftBLAS](https://github.com/urbit/SoftBLAS):
 where SoftBLAS does software IEEE-754 linear algebra on top of Berkeley
 SoftFloat, SoftUnum does software *posit* arithmetic.
 
-> **Status (2026-06-27):** posit8 (`posit<8,2>`) complete and **bit-exact**
-> across its whole surface — verified exhaustively against SoftPosit `pX2`
-> (all 65,536 pairs for add/sub/mul/div/compare, all 256 values for
-> sqrt/round/neg, integer conversion, plus sampled fma and quire/fdp).
-> posit16 and posit32 are next.
+> **Status (2026-06-27):** posit8 / posit16 / posit32 (`posit<{8,16,32},2>`)
+> complete and **bit-exact** across the whole core surface — decode/encode,
+> sign/compare, add/sub/mul/div/fma/sqrt, round (near/floor/ceil), integer
+> conversion, and the 16n-bit quire + fused dot product. posit8 is verified
+> *exhaustively* (all 65,536 pairs); posit16/posit32 over ~600k random pairs
+> plus a structured edge grid. Oracle: SoftPosit `pX2` for posit8/16, and the
+> **dedicated `p32`** path for posit32 (SoftPosit's generic `pX2` misrounds
+> tiny values at width 32 — it was only validated to X≈20; our clean-room
+> implementation does not have this bug). IEEE-754 conversions and the
+> granular quire ops are next, then the vere vendoring + jets.
 
 ## Standard, not legacy
 
@@ -44,13 +49,17 @@ native integer that covers its worst-case intermediate:
 
 | width | aura | backing | quire | notes |
 |---|---|---|---|---|
-| `posit8`  | `@rpb` | `unsigned __int128` | 128-bit | everything fits one native int |
-| `posit16` | `@rph` | `__int128` + a small `u256` | 256-bit | *planned* |
-| `posit32` | `@rps` | `u256` / `u512` helpers | 512-bit | `add`/`sqrt`/quire need multi-word; *planned* |
+| `posit8`  | `@rpb` | `unsigned __int128` | 128-bit | everything fits one native int (`p8.c`) |
+| `posit16` | `@rph` | 512-bit `wide_t` | 256-bit | generic core (`pcore.h`) |
+| `posit32` | `@rps` | 512-bit `wide_t` | 512-bit | generic core; `add`/`sqrt`/quire need multi-word |
 
 posit32's `add` can shift a significand to a common exponent by ~240 bits
-(maxpos + minpos) and its quire is 512 bits, so a couple of fixed-size
-multi-word helpers are needed there — still per-width, still no general bignum.
+(maxpos + minpos) and its quire is 512 bits, so a fixed-size multi-word integer
+(`src/posit/pwide.h`, just shift/add/sub/compare + a digit-by-digit `isqt` — no
+wide multiply or division) is needed there. posit16 and posit32 share one
+generic algorithm (`src/posit/pcore.h`) instantiated per width; posit8 keeps its
+own `__int128` copy (`p8.c`) as the readable reference. Still per-width native
+fixed-size integers, no general/heap bignum.
 
 ## Build & test
 
@@ -67,8 +76,12 @@ it (default `/opt/anaconda3/bin/python`).
 
 ```
 include/softunum.h     public API (raw-bit posit types + prototypes)
-src/posit/p8.c         posit8 (posit<8,2>)
-tools/oracle.py        ctypes harness: SoftUnum vs SoftPosit pX2
+src/posit/p8.c         posit8 (posit<8,2>) -- __int128 reference copy
+src/posit/pwide.h      fixed 512-bit integer (shift/add/sub/cmp/mask/isqt)
+src/posit/pcore.h      generic posit<N,2> core, instantiated per width
+src/posit/p16.c        posit16 (posit<16,2>)  =  #define PW_N 16 + pcore.h
+src/posit/p32.c        posit32 (posit<32,2>)  =  #define PW_N 32 + pcore.h
+tools/oracle.py        ctypes harness: SoftUnum vs SoftPosit (pX2 / p32)
 ```
 
 ## Planned: a parallel Rust implementation
