@@ -303,6 +303,33 @@ posit8_t p8_fdp(const posit8_t *av, const posit8_t *bv, int64_t len) {
   return q_to_p(q);
 }
 
+//  ---- granular quire ops ---------------------------------------------------
+//  The quire is exposed as QWORDS=2 little-endian uint64 words (128 bits).
+static u128 p_to_q(unsigned p) {
+  up_t u = sea(p);
+  if ( u.kind == K_NAR )  return QNAR;
+  if ( u.kind == K_ZERO ) return 0;
+  u128 m = u.a << llabs(u.e + QSCALE);
+  return u.sign ? m : ((u128)0 - m);
+}
+static u128 q_neg_(u128 q) { return (q == QNAR) ? QNAR : ((u128)0 - q); }
+static u128 q_addq_(u128 x, u128 y) { return (x == QNAR || y == QNAR) ? QNAR : (x + y); }
+static inline u128 q_load(const uint64_t *w) { return (u128)w[0] | ((u128)w[1] << 64); }
+static inline void q_store(uint64_t *w, u128 q) { w[0] = (uint64_t)q; w[1] = (uint64_t)(q >> 64); }
+
+void p8_q_zero(uint64_t *q) { q[0] = 0; q[1] = 0; }
+void p8_q_nar(uint64_t *q)  { q_store(q, QNAR); }
+int  p8_q_is_nar(const uint64_t *q) { return q_load(q) == QNAR; }
+void p8_p_to_q(posit8_t p, uint64_t *q) { q_store(q, p_to_q(p)); }
+posit8_t p8_q_to_p(const uint64_t *q)   { return q_to_p(q_load(q)); }
+void p8_q_mul_add(uint64_t *q, posit8_t a, posit8_t b) { q_store(q, q_mul_add(q_load(q), a, b)); }
+void p8_q_mul_sub(uint64_t *q, posit8_t a, posit8_t b) { q_store(q, q_mul_add(q_load(q), a, p8_neg(b))); }
+void p8_q_add_p(uint64_t *q, posit8_t p) { q_store(q, q_mul_add(q_load(q), p, NARBITS >> 1)); }
+void p8_q_sub_p(uint64_t *q, posit8_t p) { q_store(q, q_mul_add(q_load(q), p8_neg(p), NARBITS >> 1)); }
+void p8_q_add_q(uint64_t *x, const uint64_t *y) { q_store(x, q_addq_(q_load(x), q_load(y))); }
+void p8_q_sub_q(uint64_t *x, const uint64_t *y) { q_store(x, q_addq_(q_load(x), q_neg_(q_load(y)))); }
+void p8_q_negate(uint64_t *q) { q_store(q, q_neg_(q_load(q))); }
+
 //  ---- IEEE-754 conversion (value-based, any posit width <-> any float) ------
 #include "pieee.h"
 

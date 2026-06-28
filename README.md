@@ -24,8 +24,11 @@ SoftFloat, SoftUnum does software *posit* arithmetic.
 > clean-room code avoids) — posit8 *exhaustively*, posit16/32 over ~600k pairs +
 > an edge grid; (3) a Hoon-faithful transcendental reference; (4) **numpy** as
 > the IEEE reference for the conversions (posit8 exhaustive `to_*`; all 65,536
-> binary16 inputs exhaustive `from_*`). The granular quire ops are next, then
-> the vere vendoring + jets.
+> binary16 inputs exhaustive `from_*`); (5) for the **granular quire ops**
+> (`p_to_q`, `q_to_p`, `q_mul_add/sub`, `q_add/sub_p`, `q_add/sub_q`,
+> `q_negate`), an exact big-integer model of the 16n-bit accumulator (thousands
+> of random op sequences, per-step word comparison) plus the Hoon
+> `test-quire-rpb` vectors. **The vere vendoring + jets are next.**
 
 ## Standard, not legacy
 
@@ -93,6 +96,7 @@ src/posit/pieee.h      IEEE-754 binary{16,32,64,128} codec (shared)
 tools/oracle.py        ctypes harness: SoftUnum vs SoftPosit (pX2 / p32)
 tools/hoon_vectors.py  ctypes harness: SoftUnum vs /lib/unum Hoon vectors
 tools/ieee_check.py    ctypes harness: conversions vs numpy + exact value
+tools/quire_check.py   ctypes harness: quire ops vs an exact big-int model
 ```
 
 ## Planned: a parallel Rust implementation

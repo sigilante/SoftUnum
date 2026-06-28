@@ -124,6 +124,22 @@ posit8_t p8_from_rs(uint32_t r);            //  binary32  -> posit
 posit8_t p8_from_rd(uint64_t r);            //  binary64  -> posit
 posit8_t p8_from_rq(const uint64_t in[2]);  //  binary128 {lo,hi} -> posit
 
+//  Granular quire ops.  The quire is a 16n-bit exact accumulator held as
+//  little-endian uint64 words: posit8 uses 2 words (128 bits).  The accumulate
+//  ops mutate the quire in place.
+void     p8_q_zero(uint64_t q[2]);
+void     p8_q_nar(uint64_t q[2]);
+int      p8_q_is_nar(const uint64_t q[2]);
+void     p8_p_to_q(posit8_t p, uint64_t q[2]);
+posit8_t p8_q_to_p(const uint64_t q[2]);
+void     p8_q_mul_add(uint64_t q[2], posit8_t a, posit8_t b);  //  q += a*b
+void     p8_q_mul_sub(uint64_t q[2], posit8_t a, posit8_t b);  //  q -= a*b
+void     p8_q_add_p(uint64_t q[2], posit8_t p);                //  q += p
+void     p8_q_sub_p(uint64_t q[2], posit8_t p);                //  q -= p
+void     p8_q_add_q(uint64_t x[2], const uint64_t y[2]);       //  x += y
+void     p8_q_sub_q(uint64_t x[2], const uint64_t y[2]);       //  x -= y
+void     p8_q_negate(uint64_t q[2]);
+
 //  =====================================================================
 //  posit16 (posit<16,2>)  and  posit32 (posit<32,2>)
 //  =====================================================================
@@ -183,6 +199,19 @@ posit16_t p16_from_rh(uint32_t r);
 posit16_t p16_from_rs(uint32_t r);
 posit16_t p16_from_rd(uint64_t r);
 posit16_t p16_from_rq(const uint64_t in[2]);
+//  posit16 quire = 4 words (256 bits).
+void      p16_q_zero(uint64_t q[4]);
+void      p16_q_nar(uint64_t q[4]);
+int       p16_q_is_nar(const uint64_t q[4]);
+void      p16_p_to_q(posit16_t p, uint64_t q[4]);
+posit16_t p16_q_to_p(const uint64_t q[4]);
+void      p16_q_mul_add(uint64_t q[4], posit16_t a, posit16_t b);
+void      p16_q_mul_sub(uint64_t q[4], posit16_t a, posit16_t b);
+void      p16_q_add_p(uint64_t q[4], posit16_t p);
+void      p16_q_sub_p(uint64_t q[4], posit16_t p);
+void      p16_q_add_q(uint64_t x[4], const uint64_t y[4]);
+void      p16_q_sub_q(uint64_t x[4], const uint64_t y[4]);
+void      p16_q_negate(uint64_t q[4]);
 
 posit32_t p32_neg(posit32_t a);
 posit32_t p32_abs(posit32_t a);
@@ -238,5 +267,18 @@ posit32_t p32_from_rh(uint32_t r);
 posit32_t p32_from_rs(uint32_t r);
 posit32_t p32_from_rd(uint64_t r);
 posit32_t p32_from_rq(const uint64_t in[2]);
+//  posit32 quire = 8 words (512 bits).
+void      p32_q_zero(uint64_t q[8]);
+void      p32_q_nar(uint64_t q[8]);
+int       p32_q_is_nar(const uint64_t q[8]);
+void      p32_p_to_q(posit32_t p, uint64_t q[8]);
+posit32_t p32_q_to_p(const uint64_t q[8]);
+void      p32_q_mul_add(uint64_t q[8], posit32_t a, posit32_t b);
+void      p32_q_mul_sub(uint64_t q[8], posit32_t a, posit32_t b);
+void      p32_q_add_p(uint64_t q[8], posit32_t p);
+void      p32_q_sub_p(uint64_t q[8], posit32_t p);
+void      p32_q_add_q(uint64_t x[8], const uint64_t y[8]);
+void      p32_q_sub_q(uint64_t x[8], const uint64_t y[8]);
+void      p32_q_negate(uint64_t q[8]);
 
 #endif  //  SOFTUNUM_H

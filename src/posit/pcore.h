@@ -288,6 +288,45 @@ uint32_t PFN(_fdp)(const uint32_t *av, const uint32_t *bv, int64_t len) {
   return q_to_p(q);
 }
 
+//  ---- granular quire ops ---------------------------------------------------
+//  The quire is exposed as QWORDS little-endian uint64 words (QBITS bits).
+#define QWORDS (QBITS / 64)
+static wide_t p_to_q(uint32_t p) {
+  up_t u = sea(p);
+  if ( u.kind == K_NAR )  return q_nar();
+  if ( u.kind == K_ZERO ) return w_zero();
+  wide_t m = w_masklow(w_shl(u.a, (int)llabs(u.e + QSCALE)), QBITS);
+  return u.sign ? m : w_masklow(w_sub(w_zero(), m), QBITS);
+}
+static wide_t q_neg_(wide_t q) {
+  return (w_cmp(q, q_nar()) == 0) ? q_nar() : w_masklow(w_sub(w_zero(), q), QBITS);
+}
+static wide_t q_addq_(wide_t x, wide_t y) {
+  if ( w_cmp(x, q_nar()) == 0 || w_cmp(y, q_nar()) == 0 ) return q_nar();
+  return w_masklow(w_add(x, y), QBITS);
+}
+static wide_t q_load(const uint64_t *w) {
+  wide_t q = w_zero();
+  for ( int i = 0; i < QWORDS; i++ ) q.w[i] = w[i];
+  return q;
+}
+static void q_store(uint64_t *w, wide_t q) {
+  for ( int i = 0; i < QWORDS; i++ ) w[i] = q.w[i];
+}
+
+void PFN(_q_zero)(uint64_t *q) { for ( int i = 0; i < QWORDS; i++ ) q[i] = 0; }
+void PFN(_q_nar)(uint64_t *q)  { q_store(q, q_nar()); }
+int  PFN(_q_is_nar)(const uint64_t *q) { return w_cmp(q_load(q), q_nar()) == 0; }
+void PFN(_p_to_q)(uint32_t p, uint64_t *q) { q_store(q, p_to_q(p)); }
+uint32_t PFN(_q_to_p)(const uint64_t *q)   { return q_to_p(q_load(q)); }
+void PFN(_q_mul_add)(uint64_t *q, uint32_t a, uint32_t b) { q_store(q, q_mul_add(q_load(q), a, b)); }
+void PFN(_q_mul_sub)(uint64_t *q, uint32_t a, uint32_t b) { q_store(q, q_mul_add(q_load(q), a, PFN(_neg)(b))); }
+void PFN(_q_add_p)(uint64_t *q, uint32_t p) { q_store(q, q_mul_add(q_load(q), p, NARBITS >> 1)); }
+void PFN(_q_sub_p)(uint64_t *q, uint32_t p) { q_store(q, q_mul_add(q_load(q), PFN(_neg)(p), NARBITS >> 1)); }
+void PFN(_q_add_q)(uint64_t *x, const uint64_t *y) { q_store(x, q_addq_(q_load(x), q_load(y))); }
+void PFN(_q_sub_q)(uint64_t *x, const uint64_t *y) { q_store(x, q_addq_(q_load(x), q_neg_(q_load(y)))); }
+void PFN(_q_negate)(uint64_t *q) { q_store(q, q_neg_(q_load(q))); }
+
 //  ---- IEEE-754 conversion (value-based, any posit width <-> any float) ------
 #include "pieee.h"
 

@@ -38,6 +38,7 @@ $(SHLIB): $(SRCS)
 test: $(SHLIB)
 	$(ORACLE_PY) tools/hoon_vectors.py
 	$(ORACLE_PY) tools/ieee_check.py
+	$(ORACLE_PY) tools/quire_check.py
 	$(ORACLE_PY) tools/oracle.py
 
 #  Just the fast, dependency-light Hoon-vector check.
