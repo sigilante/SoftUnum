@@ -113,6 +113,17 @@ posit8_t p8_asin(posit8_t x);
 posit8_t p8_acos(posit8_t x);
 int      p8_is_close(posit8_t a, posit8_t b, posit8_t tol);
 
+//  IEEE-754 conversion (value-based: any posit width <-> any float width).
+//  to_rd returns the 64-bit pattern; to_rq writes {lo, hi} to out[2].
+posit8_t p8_to_rh(posit8_t p);              //  -> binary16 bits
+posit8_t p8_to_rs(posit8_t p);              //  -> binary32 bits
+uint64_t p8_to_rd(posit8_t p);              //  -> binary64 bits
+void     p8_to_rq(posit8_t p, uint64_t out[2]);   //  -> binary128 {lo,hi}
+posit8_t p8_from_rh(uint32_t r);            //  binary16  -> posit
+posit8_t p8_from_rs(uint32_t r);            //  binary32  -> posit
+posit8_t p8_from_rd(uint64_t r);            //  binary64  -> posit
+posit8_t p8_from_rq(const uint64_t in[2]);  //  binary128 {lo,hi} -> posit
+
 //  =====================================================================
 //  posit16 (posit<16,2>)  and  posit32 (posit<32,2>)
 //  =====================================================================
@@ -164,6 +175,14 @@ posit16_t p16_atan(posit16_t x);
 posit16_t p16_asin(posit16_t x);
 posit16_t p16_acos(posit16_t x);
 int       p16_is_close(posit16_t a, posit16_t b, posit16_t tol);
+posit16_t p16_to_rh(posit16_t p);
+posit16_t p16_to_rs(posit16_t p);
+uint64_t  p16_to_rd(posit16_t p);
+void      p16_to_rq(posit16_t p, uint64_t out[2]);
+posit16_t p16_from_rh(uint32_t r);
+posit16_t p16_from_rs(uint32_t r);
+posit16_t p16_from_rd(uint64_t r);
+posit16_t p16_from_rq(const uint64_t in[2]);
 
 posit32_t p32_neg(posit32_t a);
 posit32_t p32_abs(posit32_t a);
@@ -211,5 +230,13 @@ posit32_t p32_atan(posit32_t x);
 posit32_t p32_asin(posit32_t x);
 posit32_t p32_acos(posit32_t x);
 int       p32_is_close(posit32_t a, posit32_t b, posit32_t tol);
+posit32_t p32_to_rh(posit32_t p);
+posit32_t p32_to_rs(posit32_t p);
+uint64_t  p32_to_rd(posit32_t p);
+void      p32_to_rq(posit32_t p, uint64_t out[2]);
+posit32_t p32_from_rh(uint32_t r);
+posit32_t p32_from_rs(uint32_t r);
+posit32_t p32_from_rd(uint64_t r);
+posit32_t p32_from_rq(const uint64_t in[2]);
 
 #endif  //  SOFTUNUM_H

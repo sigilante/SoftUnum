@@ -288,6 +288,34 @@ uint32_t PFN(_fdp)(const uint32_t *av, const uint32_t *bv, int64_t len) {
   return q_to_p(q);
 }
 
+//  ---- IEEE-754 conversion (value-based, any posit width <-> any float) ------
+#include "pieee.h"
+
+static fnt up_to_fn(up_t u) {
+  fnt f = { FN_FIN, u.sign, u.e, w_to_u128(u.a) };
+  if ( u.kind == K_NAR )  { f.kind = FN_NAN; f.sign = 1; f.e = 0; f.a = 0; }
+  else if ( u.kind == K_ZERO ) { f.sign = 1; f.e = 0; f.a = 0; }
+  return f;
+}
+static up_t fn_to_up(fnt f) {
+  up_t u = { K_REAL, f.sign, f.e, w_from_u128(f.a) };
+  if ( f.kind != FN_FIN ) { u.kind = K_NAR; u.sign = 1; u.e = 0; u.a = w_zero(); }
+  else if ( f.a == 0 )    { u.kind = K_ZERO; u.sign = 1; u.e = 0; u.a = w_zero(); }
+  return u;
+}
+uint32_t PFN(_to_rh)(uint32_t p) { return (uint32_t)f_bit(up_to_fn(sea(p)), IEEE_RH); }
+uint32_t PFN(_to_rs)(uint32_t p) { return (uint32_t)f_bit(up_to_fn(sea(p)), IEEE_RS); }
+uint64_t PFN(_to_rd)(uint32_t p) { return (uint64_t)f_bit(up_to_fn(sea(p)), IEEE_RD); }
+void PFN(_to_rq)(uint32_t p, uint64_t out[2]) {
+  u128i b = f_bit(up_to_fn(sea(p)), IEEE_RQ); out[0] = (uint64_t)b; out[1] = (uint64_t)(b >> 64);
+}
+uint32_t PFN(_from_rh)(uint32_t r) { return bit(fn_to_up(f_sea(r, IEEE_RH))); }
+uint32_t PFN(_from_rs)(uint32_t r) { return bit(fn_to_up(f_sea(r, IEEE_RS))); }
+uint32_t PFN(_from_rd)(uint64_t r) { return bit(fn_to_up(f_sea((u128i)r, IEEE_RD))); }
+uint32_t PFN(_from_rq)(const uint64_t in[2]) {
+  return bit(fn_to_up(f_sea(((u128i)in[1] << 64) | in[0], IEEE_RQ)));
+}
+
 //  ---- elementary / transcendental functions (shared body) ------------------
 //  +pconst: encode a constant given as a fixed-point significand `a` with
 //  binary exponent `e` -- one rounding through +bit, matching the Hoon arms.

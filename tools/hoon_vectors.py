@@ -87,7 +87,31 @@ for w, op, args, exp in V:
     got = call(w, op, args)
     if got != exp: fails.append((w, op, args, got, exp))
 
-print(f"checked {len(V)} Hoon /lib/unum vectors across posit8/16/32")
+#  IEEE-754 conversions (test-ieee-rph / -rps / -matrix).  Mixed widths:
+#  to_rd returns u64, to_rh/rs return u32; from_rd takes u64, from_rh/rs u32.
+#  (w, op, arg, expected) -- w is the posit width owning the conversion arm.
+CONV = [
+  (16,"to_rh",0x4000,0x3c00),(16,"to_rh",0xb800,0xc000),
+  (16,"from_rh",0x3c00,0x4000),(16,"from_rh",0xc000,0xb800),
+  (32,"to_rs",0x40000000,0x3f800000),(32,"to_rs",0xb8000000,0xc0000000),
+  (32,"to_rs",0x38000000,0x3f000000),
+  (32,"from_rs",0x3f800000,0x40000000),(32,"from_rs",0xc0000000,0xb8000000),
+  (32,"from_rs",0x3f000000,0x38000000),
+  (16,"to_rs",0x4000,0x3f800000),                       # posit16 -> binary32
+  (32,"to_rd",0x40000000,0x3ff0000000000000),           # posit32 -> binary64
+  (8,"to_rs",0x40,0x3f800000),                          # posit8  -> binary32
+  (16,"from_rs",0x3f800000,0x4000),                     # binary32 -> posit16
+  (32,"from_rd",0x3ff0000000000000,0x40000000),         # binary64 -> posit32
+]
+for w, op, arg, exp in CONV:
+    f = getattr(lib, f"p{w}_{op}")
+    argt = u64 if op in ("to_rd", "from_rd") else u32
+    rett = u64 if op == "to_rd" else u32
+    f.argtypes = [argt]; f.restype = rett
+    got = f(arg) & (0xffffffffffffffff if rett is u64 else 0xffffffff)
+    if got != exp: fails.append((w, op, (arg,), got, exp))
+
+print(f"checked {len(V)} scalar + {len(CONV)} IEEE Hoon /lib/unum vectors")
 if not fails:
     print("ALL Hoon vectors PASS (SoftUnum bit-exact to /lib/unum).")
     sys.exit(0)
