@@ -3,7 +3,7 @@
 A software implementation of the **2022 Posit Standard** (Type-III unums:
 posits, quires, and — eventually — valids), in **pure-integer C**.
 
-![](./img/hero.jpg)
+![](./img/hero.png)
 
 SoftUnum is the companion to [SoftBLAS](https://github.com/urbit/SoftBLAS):
 where SoftBLAS does software IEEE-754 linear algebra on top of Berkeley
