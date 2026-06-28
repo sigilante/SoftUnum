@@ -1,16 +1,13 @@
 # SoftUnum
 
 A software implementation of the **2022 Posit Standard** (Type-III unums:
-posits, quires, and — eventually — valids), in **pure-integer C**.
+posits, quires, and eventually valids), in C and eventually Rust.
 
 ![](./img/hero.png)
 
-SoftUnum is the companion to [SoftBLAS](https://github.com/urbit/SoftBLAS):
+SoftUnum is a companion to [SoftBLAS](https://github.com/urbit/SoftBLAS):
 where SoftBLAS does software IEEE-754 linear algebra on top of Berkeley
-SoftFloat, SoftUnum does software *posit* arithmetic. Crucially, **SoftUnum has
-no floating-point dependency at all** — a posit is an integer, and every value
-here is a raw bit pattern (an unsigned integer), never a C `float`/`double`.
-There is no SoftFloat submodule and nothing to link.
+SoftFloat, SoftUnum does software *posit* arithmetic.
 
 > **Status (2026-06-27):** posit8 (`posit<8,2>`) complete and **bit-exact**
 > across its whole surface — verified exhaustively against SoftPosit `pX2`
