@@ -10,14 +10,17 @@ where SoftBLAS does software IEEE-754 linear algebra on top of Berkeley
 SoftFloat, SoftUnum does software *posit* arithmetic.
 
 > **Status (2026-06-27):** posit8 / posit16 / posit32 (`posit<{8,16,32},2>`)
-> complete and **bit-exact** across the whole core surface — decode/encode,
-> sign/compare, add/sub/mul/div/fma/sqrt, round (near/floor/ceil), integer
-> conversion, and the 16n-bit quire + fused dot product. posit8 is verified
-> *exhaustively* (all 65,536 pairs); posit16/posit32 over ~600k random pairs
-> plus a structured edge grid. Oracle: SoftPosit `pX2` for posit8/16, and the
-> **dedicated `p32`** path for posit32 (SoftPosit's generic `pX2` misrounds
-> tiny values at width 32 — it was only validated to X≈20; our clean-room
-> implementation does not have this bug). IEEE-754 conversions and the
+> complete and **bit-exact** — the whole core surface (decode/encode,
+> sign/compare, add/sub/mul/div/fma/sqrt, round, integer conversion, the
+> 16n-bit quire + fused dot product) plus the **elementary/transcendental
+> functions** (`exp` `sin` `cos` `tan` `log` `log2` `log10` `pow` `pow_n`
+> `factorial` `cbrt` `atan` `asin` `acos`, and the rounded constants).
+> Verified three ways: (1) the curated **`/lib/unum` Hoon vectors** (the
+> authoritative spec, incl. transcendentals — independent of SoftPosit);
+> (2) SoftPosit (`pX2` for posit8/16, **dedicated `p32`** for posit32 — its
+> generic `pX2` misrounds tiny values at width 32, a bug our clean-room code
+> avoids) — posit8 *exhaustively*, posit16/32 over ~600k pairs + an edge grid;
+> (3) a Hoon-faithful transcendental reference. IEEE-754 conversions and the
 > granular quire ops are next, then the vere vendoring + jets.
 
 ## Standard, not legacy
@@ -81,7 +84,9 @@ src/posit/pwide.h      fixed 512-bit integer (shift/add/sub/cmp/mask/isqt)
 src/posit/pcore.h      generic posit<N,2> core, instantiated per width
 src/posit/p16.c        posit16 (posit<16,2>)  =  #define PW_N 16 + pcore.h
 src/posit/p32.c        posit32 (posit<32,2>)  =  #define PW_N 32 + pcore.h
+src/posit/ptrans.h     elementary/transcendental functions (shared body)
 tools/oracle.py        ctypes harness: SoftUnum vs SoftPosit (pX2 / p32)
+tools/hoon_vectors.py  ctypes harness: SoftUnum vs /lib/unum Hoon vectors
 ```
 
 ## Planned: a parallel Rust implementation

@@ -38,7 +38,168 @@ def bind(pfx):
     f = getattr(lib, f"{pfx}_from_i64"); f.argtypes = [i64]; f.restype = u32; fns["from_i64"] = f
     f = getattr(lib, f"{pfx}_fdp")
     f.argtypes = [ctypes.POINTER(u32), ctypes.POINTER(u32), i64]; f.restype = u32; fns["fdp"] = f
+    for nm in ("exp", "sin", "cos", "tan", "log", "log2", "log10",
+               "cbrt", "factorial", "atan", "asin", "acos"):
+        f = getattr(lib, f"{pfx}_{nm}"); f.argtypes = [u32]; f.restype = u32; fns[nm] = f
+    f = getattr(lib, f"{pfx}_pow"); f.argtypes = [u32, u32]; f.restype = u32; fns["pow"] = f
+    f = getattr(lib, f"{pfx}_pow_n"); f.argtypes = [u32, u64]; f.restype = u32; fns["pow_n"] = f
+    f = getattr(lib, f"{pfx}_is_close"); f.argtypes = [u32, u32, u32]; f.restype = ci; fns["is_close"] = f
+    for nm in ("one", "pi", "tau", "e", "phi", "sqrt2", "invsqrt2", "ln2", "invln2", "ln10"):
+        f = getattr(lib, f"{pfx}_{nm}"); f.argtypes = []; f.restype = u32; fns[nm] = f
     return fns
+
+#  Independent g-layer encoder (mirrors /lib/unum +bit) -- the constants oracle.
+def encode(neg, e, a, n):
+    if a == 0: return 0
+    M = (1 << n) - 1; maxpos = (1 << (n - 1)) - 1
+    lead = a.bit_length() - 1; x = e + lead; frac = a & ((1 << lead) - 1)
+    r = x >> 2; elo = x - 4 * r
+    if r >= n - 2: return ((1 << n) - maxpos) & M if neg else maxpos
+    if r <= -(n - 1): return ((1 << n) - 1) & M if neg else 1
+    if r >= 0: regval = ((1 << (r + 1)) - 1) << 1; regwid = r + 2
+    else: regval = 1; regwid = -r + 1
+    totw = regwid + 2 + lead
+    pay = (regval << (2 + lead)) | (elo << lead) | frac
+    pw = n - 1
+    if totw <= pw:
+        mag = pay << (pw - totw)
+    else:
+        sh = totw - pw; keep = pay >> sh
+        guard = (pay >> (sh - 1)) & 1; low = pay & ((1 << (sh - 1)) - 1)
+        if guard and ((1 if low else 0) or (keep & 1)): keep += 1
+        if keep > maxpos: keep = maxpos
+        mag = keep
+    return ((1 << n) - mag) & M if neg else mag
+
+#  Reference transcendentals: transliterate the Hoon /lib/unum arms over
+#  SoftPosit posit arithmetic (the underlying ops are already verified above).
+#  SoftPosit has NO transcendentals, so the Hoon structure IS the spec.
+def run_trans(n):
+    pfx = {8: "p8", 16: "p16", 32: "p32"}[n]
+    fn = bind(pfx); O = oracle(n); mk, pt = O["mk"], O["pt"]
+    M, nar = (1 << n) - 1, 1 << (n - 1)
+    ADD = lambda a, b: pt(O["add"](mk(a), mk(b)))
+    SUB = lambda a, b: pt(O["sub"](mk(a), mk(b)))
+    MUL = lambda a, b: pt(O["mul"](mk(a), mk(b)))
+    DIV = lambda a, b: pt(O["div"](mk(a), mk(b)))
+    SQT = lambda a: pt(O["sqrt"](mk(a)))
+    NEG = lambda a: ((1 << n) - a) & M
+    ABS = lambda a: NEG(a) if (a & nar) else a
+    LT = lambda a, b: bool(O["lt"](mk(a), mk(b)))
+    LE = lambda a, b: bool(O["le"](mk(a), mk(b)))
+    EQ = lambda a, b: bool(O["eq"](mk(a), mk(b)))
+    SUN = lambda v: pt(O["from_i"](v))
+    ONE = encode(False, 0, 1, n)
+    PI = encode(False, -52, 0x3243f6a8885a31, n)
+    LN2 = encode(False, -52, 0x0b17217f7d1cf8, n)
+    LN10 = encode(False, -52, 0x24d763776aaa2b, n)
+    consts = {"one": ONE, "pi": PI, "tau": encode(False, -52, 0x6487ed5110b461, n),
+              "e": encode(False, -52, 0x2b7e151628aed3, n),
+              "phi": encode(False, -52, 0x19e3779b97f4a8, n),
+              "sqrt2": encode(False, -52, 0x16a09e667f3bcd, n),
+              "invsqrt2": encode(False, -52, 0x0b504f333f9de6, n),
+              "ln2": LN2, "invln2": encode(False, -52, 0x171547652b82fe, n), "ln10": LN10}
+
+    def r_exp(x):
+        s = t = ONE
+        for k in range(1, 21): t = MUL(t, DIV(x, SUN(k))); s = ADD(s, t)
+        return s
+    def r_sin(x):
+        t = s = x; x2 = MUL(x, x)
+        for nn in range(1, 21):
+            k = 2 * nn; t = NEG(MUL(t, DIV(x2, MUL(SUN(k), SUN(k + 1))))); s = ADD(s, t)
+        return s
+    def r_cos(x):
+        t = s = ONE; x2 = MUL(x, x)
+        for nn in range(1, 21):
+            k = 2 * nn; t = NEG(MUL(t, DIV(x2, MUL(SUN(k - 1), SUN(k))))); s = ADD(s, t)
+        return s
+    def r_tan(x): return DIV(r_sin(x), r_cos(x))
+    def r_log(x):
+        if LE(x, 0): return nar
+        y = DIV(SUB(x, ONE), ADD(x, ONE)); y2 = MUL(y, y); s = t = y
+        for nn in range(1, 31):
+            t = MUL(t, y2); s = ADD(s, MUL(DIV(ONE, SUN(2 * nn + 1)), t))
+        return MUL(SUN(2), s)
+    def r_log2(x): return DIV(r_log(x), LN2)
+    def r_log10(x): return DIV(r_log(x), LN10)
+    def r_pow(x, y): return r_exp(MUL(y, r_log(x)))
+    def r_pow_n(x, p):
+        if x == nar: return nar
+        res = ONE
+        while p: res = MUL(res, x); p -= 1
+        return res
+    def r_factorial(x):
+        if x == nar or LT(x, 0): return nar
+        t = ONE
+        while not LE(x, ONE): t = MUL(t, x); x = SUB(x, ONE)
+        return t
+    def r_cbrt(x):
+        if x == nar: return nar
+        if x == 0: return 0
+        if LT(x, 0): return nar
+        return r_pow(x, DIV(ONE, SUN(3)))
+    def r_atan(x):
+        if x == nar: return nar
+        rt = SQT(ADD(ONE, MUL(x, x))); a = DIV(ONE, rt); b = ONE
+        for _ in range(41):
+            ai = MUL(DIV(ONE, SUN(2)), ADD(a, b)); b = SQT(MUL(ai, b)); a = ai
+        return DIV(x, MUL(rt, b))
+    def r_asin(x):
+        if x == nar: return nar
+        if LT(ABS(x), ONE): return r_atan(DIV(x, SQT(SUB(ONE, MUL(x, x)))))
+        if EQ(x, ONE): return MUL(PI, DIV(ONE, SUN(2)))
+        if EQ(x, NEG(ONE)): return NEG(MUL(PI, DIV(ONE, SUN(2))))
+        return nar
+    def r_acos(x):
+        if x == nar: return nar
+        if LT(ABS(x), ONE):
+            if EQ(x, 0): return MUL(PI, DIV(ONE, SUN(2)))
+            return r_atan(DIV(SQT(SUB(ONE, MUL(x, x))), x))
+        if EQ(x, ONE): return 0
+        if EQ(x, NEG(ONE)): return PI
+        return nar
+    #  NB: factorial is excluded from the random sweep -- its naive loop
+    #  (while x>1: x-=1) does not terminate for large x (huge-1 rounds back to
+    #  huge in posit arithmetic), exactly as in /lib/unum.  It is checked below
+    #  on its safe small-integer domain only.
+    refs = {"exp": r_exp, "sin": r_sin, "cos": r_cos, "tan": r_tan, "log": r_log,
+            "log2": r_log2, "log10": r_log10, "cbrt": r_cbrt,
+            "atan": r_atan, "asin": r_asin, "acos": r_acos}
+
+    import random as _r
+    _r.seed(99)
+    one_, pi_ = ONE, PI
+    edges = [0, nar, one_, NEG(one_), pi_, encode(False, -1, 1, n), encode(False, 1, 1, n),
+             2, 3, encode(False, -3, 5, n)]
+    vals = edges + [_r.randrange(1 << n) for _ in range(200)]
+    pvals = edges + [_r.randrange(1 << n) for _ in range(40)]   # cheaper for pow
+    fails = []
+    def chk(name, got, exp, *a):
+        if got != exp: fails.append((name, a, got, exp))
+
+    for nm, rf in refs.items():
+        for x in vals: chk(nm, fn[nm](x), rf(x), x)
+    #  factorial: safe domain only (small non-negative integers, plus the
+    #  fast-exit cases: NaR and negatives -> NaR immediately).
+    fvals = [encode(False, 0, k, n) for k in range(0, 11)] + [0, nar, NEG(ONE), encode(False, -1, 1, n)]
+    for x in fvals: chk("factorial", fn["factorial"](x), r_factorial(x), x)
+    for x in pvals:
+        for y in pvals:
+            chk("pow", fn["pow"](x, y), r_pow(x, y), x, y)
+    for x in vals:
+        for p in (0, 1, 2, 3, 7):
+            chk("pow_n", fn["pow_n"](x, p), r_pow_n(x, p), x, p)
+    for nm, want in consts.items():
+        chk(nm, fn[nm](), want)
+
+    if not fails:
+        print(f"  -> posit{n} transcendentals PASS\n"); return 0
+    c = Counter(f[0] for f in fails)
+    print(f"  -> posit{n} transcendentals {len(fails)} FAILURES: {dict(c)}")
+    for f in fails[:15]:
+        print("     %-10s args=%s got=0x%x exp=0x%x" % (f[0], f[1], f[2], f[3]))
+    return 1
 
 def oracle(n):
     #  posit32 (es=2) coincides with the 2022 standard, so use SoftPosit's
@@ -142,6 +303,10 @@ def run(n, exhaustive):
         print("     %-9s args=%s got=0x%x exp=0x%x" % (f[0], f[1], f[2], f[3]))
     return 1
 
-rc = run(8, True) | run(16, False) | run(32, False)
-print("ALL PASS (bit-exact vs SoftPosit pX2)." if rc == 0 else "FAILURES above.")
+rc = 0
+for _n, _ex in [(8, True), (16, False), (32, False)]:
+    rc |= run(_n, _ex)
+    rc |= run_trans(_n)
+print("ALL PASS (bit-exact vs SoftPosit + Hoon-faithful transcendental reference)."
+      if rc == 0 else "FAILURES above.")
 sys.exit(rc)

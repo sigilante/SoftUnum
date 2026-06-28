@@ -83,6 +83,36 @@ int      p8_to_i64(posit8_t a, int64_t *out);  //  posit -> int; 0 if NaR (none)
 //  product (single rounding).  Vectors are right-justified posit patterns.
 posit8_t p8_fdp(const posit8_t *av, const posit8_t *bv, int64_t len);
 
+//  Constants (correctly rounded at the width).
+posit8_t p8_one(void);
+posit8_t p8_pi(void);
+posit8_t p8_tau(void);
+posit8_t p8_e(void);
+posit8_t p8_phi(void);
+posit8_t p8_sqrt2(void);
+posit8_t p8_invsqrt2(void);
+posit8_t p8_ln2(void);
+posit8_t p8_invln2(void);
+posit8_t p8_ln10(void);
+
+//  Elementary / transcendental functions (naive reproducible series; accurate
+//  only near the expansion point -- not correctly rounded, matching /lib/unum).
+posit8_t p8_exp(posit8_t x);
+posit8_t p8_sin(posit8_t x);
+posit8_t p8_cos(posit8_t x);
+posit8_t p8_tan(posit8_t x);
+posit8_t p8_log(posit8_t x);      //  natural log
+posit8_t p8_log2(posit8_t x);     //  base-2 log
+posit8_t p8_log10(posit8_t x);    //  base-10 log
+posit8_t p8_pow(posit8_t x, posit8_t y);
+posit8_t p8_pow_n(posit8_t x, uint64_t p);
+posit8_t p8_factorial(posit8_t x);
+posit8_t p8_cbrt(posit8_t x);
+posit8_t p8_atan(posit8_t x);
+posit8_t p8_asin(posit8_t x);
+posit8_t p8_acos(posit8_t x);
+int      p8_is_close(posit8_t a, posit8_t b, posit8_t tol);
+
 //  =====================================================================
 //  posit16 (posit<16,2>)  and  posit32 (posit<32,2>)
 //  =====================================================================
@@ -109,6 +139,31 @@ posit16_t p16_from_u64(uint64_t v);
 posit16_t p16_from_i64(int64_t v);
 int       p16_to_i64(posit16_t a, int64_t *out);
 posit16_t p16_fdp(const posit16_t *av, const posit16_t *bv, int64_t len);
+posit16_t p16_one(void);
+posit16_t p16_pi(void);
+posit16_t p16_tau(void);
+posit16_t p16_e(void);
+posit16_t p16_phi(void);
+posit16_t p16_sqrt2(void);
+posit16_t p16_invsqrt2(void);
+posit16_t p16_ln2(void);
+posit16_t p16_invln2(void);
+posit16_t p16_ln10(void);
+posit16_t p16_exp(posit16_t x);
+posit16_t p16_sin(posit16_t x);
+posit16_t p16_cos(posit16_t x);
+posit16_t p16_tan(posit16_t x);
+posit16_t p16_log(posit16_t x);
+posit16_t p16_log2(posit16_t x);
+posit16_t p16_log10(posit16_t x);
+posit16_t p16_pow(posit16_t x, posit16_t y);
+posit16_t p16_pow_n(posit16_t x, uint64_t p);
+posit16_t p16_factorial(posit16_t x);
+posit16_t p16_cbrt(posit16_t x);
+posit16_t p16_atan(posit16_t x);
+posit16_t p16_asin(posit16_t x);
+posit16_t p16_acos(posit16_t x);
+int       p16_is_close(posit16_t a, posit16_t b, posit16_t tol);
 
 posit32_t p32_neg(posit32_t a);
 posit32_t p32_abs(posit32_t a);
@@ -131,5 +186,30 @@ posit32_t p32_from_u64(uint64_t v);
 posit32_t p32_from_i64(int64_t v);
 int       p32_to_i64(posit32_t a, int64_t *out);
 posit32_t p32_fdp(const posit32_t *av, const posit32_t *bv, int64_t len);
+posit32_t p32_one(void);
+posit32_t p32_pi(void);
+posit32_t p32_tau(void);
+posit32_t p32_e(void);
+posit32_t p32_phi(void);
+posit32_t p32_sqrt2(void);
+posit32_t p32_invsqrt2(void);
+posit32_t p32_ln2(void);
+posit32_t p32_invln2(void);
+posit32_t p32_ln10(void);
+posit32_t p32_exp(posit32_t x);
+posit32_t p32_sin(posit32_t x);
+posit32_t p32_cos(posit32_t x);
+posit32_t p32_tan(posit32_t x);
+posit32_t p32_log(posit32_t x);
+posit32_t p32_log2(posit32_t x);
+posit32_t p32_log10(posit32_t x);
+posit32_t p32_pow(posit32_t x, posit32_t y);
+posit32_t p32_pow_n(posit32_t x, uint64_t p);
+posit32_t p32_factorial(posit32_t x);
+posit32_t p32_cbrt(posit32_t x);
+posit32_t p32_atan(posit32_t x);
+posit32_t p32_asin(posit32_t x);
+posit32_t p32_acos(posit32_t x);
+int       p32_is_close(posit32_t a, posit32_t b, posit32_t tol);
 
 #endif  //  SOFTUNUM_H

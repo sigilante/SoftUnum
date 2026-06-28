@@ -31,11 +31,19 @@ $(SHLIB): $(SRCS)
 %.o: %.c
 	$(CC) $(CFLAGS) -fPIC -c $< -o $@
 
-#  Exhaustive bit-exactness check against the SoftPosit pX2 oracle.
+#  Bit-exactness checks: (1) curated /lib/unum Hoon vectors (fast, independent
+#  of SoftPosit -- covers the transcendentals), (2) the exhaustive/sampled
+#  SoftPosit pX2 + p32 oracle for the core ops and a Hoon-faithful reference
+#  for the transcendentals.
 test: $(SHLIB)
+	$(ORACLE_PY) tools/hoon_vectors.py
 	$(ORACLE_PY) tools/oracle.py
+
+#  Just the fast, dependency-light Hoon-vector check.
+test-vectors: $(SHLIB)
+	$(ORACLE_PY) tools/hoon_vectors.py
 
 clean:
 	rm -f $(OBJS) libsoftunum.a $(SHLIB)
 
-.PHONY: library test clean
+.PHONY: library test test-vectors clean

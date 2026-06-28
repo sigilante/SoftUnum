@@ -287,3 +287,13 @@ uint32_t PFN(_fdp)(const uint32_t *av, const uint32_t *bv, int64_t len) {
   for ( int64_t i = 0; i < len; i++ ) q = q_mul_add(q, av[i], bv[i]);
   return q_to_p(q);
 }
+
+//  ---- elementary / transcendental functions (shared body) ------------------
+//  +pconst: encode a constant given as a fixed-point significand `a` with
+//  binary exponent `e` -- one rounding through +bit, matching the Hoon arms.
+static uint32_t pconst(long long e, uint64_t a) {
+  up_t u = { K_REAL, 1, e, w_from_u64(a) };
+  return bit(u);
+}
+
+#include "ptrans.h"

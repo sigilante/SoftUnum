@@ -302,3 +302,14 @@ posit8_t p8_fdp(const posit8_t *av, const posit8_t *bv, int64_t len) {
   for ( int64_t i = 0; i < len; i++ ) q = q_mul_add(q, av[i], bv[i]);
   return q_to_p(q);
 }
+
+//  ---- elementary / transcendental functions (shared body) ------------------
+//  +pconst: encode a constant given as Q(.)52 fixed-point significand `a` with
+//  binary exponent `e` -- one rounding through +bit, matching the Hoon arms.
+static uint32_t pconst(long long e, uint64_t a) {
+  up_t u = { K_REAL, 1, e, (u128)a };
+  return bit(u);
+}
+
+#define PW_PREFIX p8
+#include "ptrans.h"
