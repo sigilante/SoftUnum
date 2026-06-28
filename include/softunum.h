@@ -1,0 +1,86 @@
+//  SoftUnum -- a software implementation of the 2022 Posit Standard (unums).
+//
+//  Companion to SoftBLAS: where SoftBLAS does software IEEE-754 (via Berkeley
+//  SoftFloat), SoftUnum does software *posits/quires/valids* (Type-III unums).
+//  It has NO floating-point dependency -- posits are integers, and every value
+//  here is a raw bit pattern (an unsigned integer), never a C float/double.
+//
+//  STANDARD, NOT LEGACY.  The 2022 Posit Standard fixes the exponent size at
+//  es = 2 for EVERY width (the exponent field is a 2-bit unsigned integer,
+//  0..3), so useed = 2^2^es = 16.  This differs from the 2017 draft and from
+//  SoftPosit's *fast* p8/p16 types (es = 0 / es = 1).  Only posit32 coincides
+//  between the two conventions; our posit8/posit16 layouts match SoftPosit's
+//  GENERIC pX2 (es = 2 at any width), which is our verification oracle.
+//
+//  SoftUnum is the bit-exact C twin of the pure-Hoon `/lib/unum` (numerics
+//  repo, libmath/desk/lib/unum.hoon): each routine runs the IDENTICAL algorithm
+//  as its Hoon arm (same decode, same single-rounding encode), so a jet built
+//  on SoftUnum produces output bit-identical to the unjetted Hoon.
+//
+//  Posit bit patterns are passed RIGHT-justified in the low n bits of a
+//  uint32_t (the Hoon @-atom convention), NOT left-justified like SoftPosit's
+//  internal `posit_2_t`.
+
+#ifndef SOFTUNUM_H
+#define SOFTUNUM_H
+
+#include <stdint.h>
+
+//  A posit is its raw n-bit pattern in the low bits of a uint32_t.
+typedef uint32_t posit8_t;    //  posit<8,2>,  "byte"   (@rpb)
+typedef uint32_t posit16_t;   //  posit<16,2>, "half"   (@rph)
+typedef uint32_t posit32_t;   //  posit<32,2>, "single" (@rps)
+
+//  Special bit patterns (per width): zero is all-zero; NaR (Not a Real) is the
+//  most-negative two's-complement pattern (1000...0).
+#define SU_P8_ZERO    0x00u
+#define SU_P8_NAR     0x80u
+#define SU_P8_ONE     0x40u
+#define SU_P8_MAXPOS  0x7fu
+#define SU_P8_MINPOS  0x01u
+
+#define SU_P16_ZERO   0x0000u
+#define SU_P16_NAR    0x8000u
+#define SU_P16_ONE    0x4000u
+
+#define SU_P32_ZERO   0x00000000u
+#define SU_P32_NAR    0x80000000u
+#define SU_P32_ONE    0x40000000u
+
+//  =====================================================================
+//  posit8  (posit<8,2>)
+//  =====================================================================
+
+//  Sign / comparison (raw two's-complement integer ordering of the bits, §5.3).
+posit8_t p8_neg(posit8_t a);
+posit8_t p8_abs(posit8_t a);
+posit8_t p8_sgn(posit8_t a);
+int      p8_eq(posit8_t a, posit8_t b);   //  a == b   (bitwise; NaR==NaR true)
+int      p8_lt(posit8_t a, posit8_t b);   //  a <  b
+int      p8_le(posit8_t a, posit8_t b);   //  a <= b
+int      p8_gt(posit8_t a, posit8_t b);   //  a >  b
+int      p8_ge(posit8_t a, posit8_t b);   //  a >= b
+
+//  Arithmetic (§5.4): exact g-layer combine, single round.
+posit8_t p8_add(posit8_t a, posit8_t b);
+posit8_t p8_sub(posit8_t a, posit8_t b);
+posit8_t p8_mul(posit8_t a, posit8_t b);
+posit8_t p8_div(posit8_t a, posit8_t b);
+posit8_t p8_fma(posit8_t a, posit8_t b, posit8_t c);   //  round(a*b + c) once
+posit8_t p8_sqrt(posit8_t a);
+
+//  Rounding to integral value.
+posit8_t p8_nearest_int(posit8_t a);   //  round-nearest-even
+posit8_t p8_floor(posit8_t a);
+posit8_t p8_ceil(posit8_t a);
+
+//  Integer conversion.
+posit8_t p8_from_u64(uint64_t v);   //  unsigned -> posit
+posit8_t p8_from_i64(int64_t v);    //  signed   -> posit
+int      p8_to_i64(posit8_t a, int64_t *out);  //  posit -> int; 0 if NaR (none)
+
+//  Quire (§3.4 / §5.11): the 16n-bit exact accumulator and the fused dot
+//  product (single rounding).  Vectors are right-justified posit patterns.
+posit8_t p8_fdp(const posit8_t *av, const posit8_t *bv, int64_t len);
+
+#endif  //  SOFTUNUM_H

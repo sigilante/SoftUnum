@@ -1,0 +1,7 @@
+*.o
+*.a
+*.so
+*.dylib
+__pycache__/
+*.pyc
+spec/vectors/
