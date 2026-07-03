@@ -51,15 +51,38 @@ uint32_t PFN(_ln2)(void)      { return pconst(-52, 0x0b17217f7d1cf8ull); }
 uint32_t PFN(_invln2)(void)   { return pconst(-52, 0x171547652b82feull); }
 uint32_t PFN(_ln10)(void)     { return pconst(-52, 0x24d763776aaa2bull); }
 
-//  ---- shared wide fixed-point constants + lazy one-time init ---------------
+//  ---- shared wide fixed-point constants + per-call (re)init -----------------
 //  Hex significands transcribed VERBATIM from unum.hoon (dots stripped only;
 //  no re-derivation -- cross-checked against libmath/tools/unum_cheb_check.py's
 //  independently-computed hex dumps).  `static` (internal linkage): this
 //  header is textually included once per translation unit (p8.c, and once
 //  each for p16/p32 via pcore.h), so each TU gets its own private copy --
 //  exactly like the existing per-width statics (sea/bit/pconst).
-
-static int          PFN(_gci_ready) = 0;
+//
+//  NOT memoized across calls (deliberate, found the hard way): this file was
+//  originally written with a `_gci_ready` guard so the ~30 GMP constants were
+//  parsed once per process and reused via long-lived heap pointers held in
+//  these `static gval_t` globals.  That is correct C and passes the native
+//  `make test` harness (a single process, one long straight-line run), but
+//  produces silently WRONG, NON-DETERMINISTIC results when this code is
+//  jetted into the urbit runtime (vere) and called from more than one
+//  separate Arvo event/dojo submission: the first call in a process is fine,
+//  but every call after it reads back garbage through what should be stable
+//  pointers into the earlier gval_t.a mpz buffers.  Root cause not fully
+//  chased (something about vere's per-event execution model does not let
+//  arbitrary long-lived C-heap state outlive a single event the way a normal
+//  batch/CLI process would) -- but disabling the memoization (recompute all
+//  ~30 constants fresh on every call, never trusting old pointers) was
+//  verified to fully fix it: bit-exact and deterministic across many
+//  cross-event calls on a live vere ship, at a measured ~30us/call for
+//  posit8 sin (vs. ~250us/call fully interpreted) -- still solidly
+//  jet-speed, just without the constant-parsing memoization.  Trade-off:
+//  each call now leaks the previous call's ~30 small mpz allocations (a few
+//  hundred bytes) instead of freeing them, since after the corruption above
+//  it is NOT safe to assume the old gval_t.a pointers are still valid
+//  memory to mpz_clear -- see the git history for the previous memoized
+//  version and the numerics repo's `unum-chebyshev-rewrite-plan` /
+//  `unum-vere-jet-static-state-bug` memory notes for the full investigation.
 static gval_t        PFN(_ONE_G);
 static gval_t        PFN(_TWO_G);
 static gval_t        PFN(_HALF_G);
@@ -82,8 +105,6 @@ static gval_t        PFN(_ATAN_BPPI4); static gval_t PFN(_ATAN_BPTHREEHALF);
 static gval_t        PFN(_ATAN_BPPI2);
 
 static void PFN(_gconst_init)(void) {
-  if ( PFN(_gci_ready) ) return;
-  PFN(_gci_ready) = 1;
   PFN(_ONE_G)       = gval_small(1, 0, 1);
   PFN(_TWO_G)       = gval_small(1, 1, 1);
   PFN(_HALF_G)      = gval_small(1, -1, 1);
@@ -162,6 +183,41 @@ static void PFN(_gconst_init)(void) {
   PFN(_ATAN_CS)[12] = gval_const(0, -128, "55555555555555555555555555555555");
 }
 
+//  Mirror-image of _gconst_init(): mpz_clear every one of the ~30 statics
+//  _gconst_init() just populated.  Called exactly once per PUBLIC entry
+//  point (_exp/_sin/_cos/_tan/_log/_log2/_log10/_atan), on every return path
+//  after _gconst_init() ran -- never inside the internal helpers (_sc/_lr/
+//  _atan_core), which only ever run nested inside one of those public calls
+//  and share the same init/clear pair.  This is what keeps "recompute fresh
+//  every call" (see the comment above _gconst_init/the static decls) from
+//  being an unbounded per-call leak: each call's own constants are exact
+//  same-call GMP hygiene (init, use, clear before returning), identical in
+//  spirit to how every other local gval_t in this file is already handled --
+//  it says nothing about whether a *previous* call's cached pointers would
+//  have been safe to clear, which is the thing that was NOT safe to assume.
+static void PFN(_gconst_clear)(void) {
+  gval_clear(&PFN(_ONE_G));
+  gval_clear(&PFN(_TWO_G));
+  gval_clear(&PFN(_HALF_G));
+  gval_clear(&PFN(_THREEHALF_G));
+  gval_clear(&PFN(_LN2_WIDE));
+  gval_clear(&PFN(_INVLN2_WIDE));
+  gval_clear(&PFN(_LOG10_TWO_WIDE));
+  gval_clear(&PFN(_INVLN10_WIDE));
+  gval_clear(&PFN(_PI2_WIDE));
+  gval_clear(&PFN(_INVPI2_WIDE));
+  for ( int i = 0; i < 8;  i++ ) gval_clear(&PFN(_EXP_CS)[i]);
+  for ( int i = 0; i < 6;  i++ ) gval_clear(&PFN(_SIN_CS)[i]);
+  for ( int i = 0; i < 6;  i++ ) gval_clear(&PFN(_COS_CS)[i]);
+  for ( int i = 0; i < 16; i++ ) gval_clear(&PFN(_LR_CS)[i]);
+  for ( int i = 0; i < 13; i++ ) gval_clear(&PFN(_ATAN_CS)[i]);
+  gval_clear(&PFN(_ATAN_B1));         gval_clear(&PFN(_ATAN_B2));
+  gval_clear(&PFN(_ATAN_B3));         gval_clear(&PFN(_ATAN_B4));
+  gval_clear(&PFN(_ATAN_BP0));        gval_clear(&PFN(_ATAN_BPHALF));
+  gval_clear(&PFN(_ATAN_BPPI4));      gval_clear(&PFN(_ATAN_BPTHREEHALF));
+  gval_clear(&PFN(_ATAN_BPPI2));
+}
+
 //  ---- +exp:  e^x = 2^k * poly(r), x = k*ln2 + r (Chebyshev-minimax degree-7,
 //  correctly rounded at posit8/16/32).  +bit's own maxpos/minpos saturation
 //  gives overflow/underflow for free.
@@ -186,6 +242,7 @@ uint32_t PFN(_exp)(uint32_t x) {
   mpz_clear(kmpz);
   uint32_t result = g_bit(p, N);
   gval_clear(&p);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -194,8 +251,10 @@ uint32_t PFN(_exp)(uint32_t x) {
 //  [sin(ax), cos(ax)] pair, still exact g-triples.
 typedef struct { gval_t sn; gval_t cs; } PFN(_sc_t);
 
+//  Callers (_sin/_cos/_tan) already called _gconst_init() before reaching
+//  here and will call _gconst_clear() once, after this returns -- don't
+//  redo the init (would leak the caller's freshly-made constants).
 static PFN(_sc_t) PFN(_sc)(gval_t ax) {
-  PFN(_gconst_init)();
   gval_t qg = gmul(ax, PFN(_INVPI2_WIDE));
   mpz_t qmpz; mpz_init(qmpz);
   g_round(qmpz, qg);
@@ -237,6 +296,7 @@ uint32_t PFN(_sin)(uint32_t x) {
   sc.sn.sign = u.sign ? sc.sn.sign : !sc.sn.sign;
   uint32_t result = g_bit(sc.sn, N);
   gval_clear(&sc.sn);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -251,6 +311,7 @@ uint32_t PFN(_cos)(uint32_t x) {
   gval_clear(&ax); gval_clear(&sc.sn);
   uint32_t result = g_bit(sc.cs, N);
   gval_clear(&sc.cs);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -266,6 +327,7 @@ uint32_t PFN(_tan)(uint32_t x) {
   gval_clear(&ax);
   if ( mpz_sgn(sc.cs.a) == 0 ) {         //  cos(ax) exactly 0 (measure-zero, guard anyway)
     gval_clear(&sc.sn); gval_clear(&sc.cs);
+    PFN(_gconst_clear)();
     return NARBITS;
   }
   gval_t raw = gdiv(sc.sn, sc.cs, 160);
@@ -273,6 +335,7 @@ uint32_t PFN(_tan)(uint32_t x) {
   raw.sign = u.sign ? raw.sign : !raw.sign;
   uint32_t result = g_bit(raw, N);
   gval_clear(&raw);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -291,8 +354,9 @@ uint32_t PFN(_pow_n)(uint32_t x, uint64_t p) {
 //  fast; degree-16 is the smallest correctly-rounded at p8/16/32).
 typedef struct { long long e; gval_t m; } PFN(_lr_t);
 
+//  Caller (_log/_log2/_log10) already called _gconst_init() before reaching
+//  here and will call _gconst_clear() once, after this returns.
 static PFN(_lr_t) PFN(_lr)(gval_t g) {
-  PFN(_gconst_init)();
   unsigned long lead = (unsigned long)(mpz_sizeinbase(g.a, 2) - 1);
   gval_t mup = gval_new(); mup.sign = 1; mup.e = -(long long)lead; mpz_set(mup.a, g.a);
   long long bige = (long long)lead + g.e;
@@ -325,6 +389,7 @@ uint32_t PFN(_log)(uint32_t x) {
   gval_t sum = gadd(eln2, em.m); gval_clear(&eln2); gval_clear(&em.m);
   uint32_t result = g_bit(sum, N);
   gval_clear(&sum);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -345,6 +410,7 @@ uint32_t PFN(_log2)(uint32_t x) {
   gval_t sum = gadd(eup, mlog); gval_clear(&eup); gval_clear(&mlog);
   uint32_t result = g_bit(sum, N);
   gval_clear(&sum);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -363,6 +429,7 @@ uint32_t PFN(_log10)(uint32_t x) {
   gval_t sum = gadd(t1, t2); gval_clear(&t1); gval_clear(&t2);
   uint32_t result = g_bit(sum, N);
   gval_clear(&sum);
+  PFN(_gconst_clear)();
   return result;
 }
 
@@ -389,8 +456,9 @@ uint32_t PFN(_cbrt)(uint32_t x) {
 //  ---- +atan-core:  fdlibm breakpoint reduction (7/16, 11/16, 19/16, 39/16 --
 //  exact dyadic thresholds) + degree-13 EXACT Taylor kernel in z=xr*xr.
 //  ax must already be a non-negative gval_t.
+//  Caller (_atan) already called _gconst_init() before reaching here and
+//  will call _gconst_clear() once, after this returns.
 static gval_t PFN(_atan_core)(gval_t ax) {
-  PFN(_gconst_init)();
   gval_t xr, bp;
   if ( glt(ax, PFN(_ATAN_B1)) ) {
     xr = gval_copy(ax);
@@ -438,6 +506,7 @@ uint32_t PFN(_atan)(uint32_t x) {
   raw.sign = u.sign ? raw.sign : !raw.sign;
   uint32_t result = g_bit(raw, N);
   gval_clear(&raw);
+  PFN(_gconst_clear)();
   return result;
 }
 
