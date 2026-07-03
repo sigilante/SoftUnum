@@ -95,8 +95,10 @@ posit8_t p8_ln2(void);
 posit8_t p8_invln2(void);
 posit8_t p8_ln10(void);
 
-//  Elementary / transcendental functions (naive reproducible series; accurate
-//  only near the expansion point -- not correctly rounded, matching /lib/unum).
+//  Elementary / transcendental functions: range-reduced Chebyshev-minimax /
+//  exact-Taylor kernels (src/posit/pgmp.h + ptrans.h), matching /lib/unum's
+//  rewritten arms.  Correctly rounded (0 ULP vs mpmath) for exp/log/log2/
+//  log10/sin/cos/atan; faithful (a few ULP) for tan/asin/acos.
 posit8_t p8_exp(posit8_t x);
 posit8_t p8_sin(posit8_t x);
 posit8_t p8_cos(posit8_t x);

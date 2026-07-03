@@ -363,4 +363,6 @@ static uint32_t pconst(long long e, uint64_t a) {
   return bit(u);
 }
 
+//  Bridge from this file's wide_t-backed up_t.a into the GMP g-layer (pgmp.h).
+#define UP_TO_GVAL(u) gval_from_wide((u).sign, (u).e, (u).a)
 #include "ptrans.h"

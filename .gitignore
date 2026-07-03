@@ -5,3 +5,5 @@
 __pycache__/
 *.pyc
 spec/vectors/
+tools/cheb_check
+tools/cheb_vectors.txt

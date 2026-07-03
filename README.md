@@ -9,7 +9,7 @@ SoftUnum is a companion to [SoftBLAS](https://github.com/urbit/SoftBLAS):
 where SoftBLAS does software IEEE-754 linear algebra on top of Berkeley
 SoftFloat, SoftUnum does software *posit* arithmetic.
 
-> **Status (2026-06-27):** posit8 / posit16 / posit32 (`posit<{8,16,32},2>`)
+> **Status (2026-07-02):** posit8 / posit16 / posit32 (`posit<{8,16,32},2>`)
 > complete and **bit-exact** — the whole core surface (decode/encode,
 > sign/compare, add/sub/mul/div/fma/sqrt, round, integer conversion, the
 > 16n-bit quire + fused dot product) plus the **elementary/transcendental
@@ -17,18 +17,26 @@ SoftFloat, SoftUnum does software *posit* arithmetic.
 > `factorial` `cbrt` `atan` `asin` `acos`, and the rounded constants), and the
 > **IEEE-754 conversions** (`to_rh/rs/rd/rq`, `from_*` — value-based, any posit
 > width ↔ any float width).
-> Verified four ways: (1) the curated **`/lib/unum` Hoon vectors** (the
+> The transcendentals are range-reduced Chebyshev-minimax / exact-Taylor
+> kernels (`src/posit/pgmp.h` + `ptrans.h`), matching `/lib/unum`'s rewrite:
+> correctly rounded (0 ULP vs mpmath) for exp/log/log2/log10/sin/cos/atan,
+> faithful (a few ULP) for tan/asin/acos — see "Arbitrary precision for the
+> transcendentals" below.
+> Verified five ways: (1) the curated **`/lib/unum` Hoon vectors** (the
 > authoritative spec, incl. transcendentals + `test-ieee-*` — independent of
 > SoftPosit); (2) SoftPosit (`pX2` for posit8/16, **dedicated `p32`** for
 > posit32 — its generic `pX2` misrounds tiny values at width 32, a bug our
 > clean-room code avoids) — posit8 *exhaustively*, posit16/32 over ~600k pairs +
-> an edge grid; (3) a Hoon-faithful transcendental reference; (4) **numpy** as
-> the IEEE reference for the conversions (posit8 exhaustive `to_*`; all 65,536
-> binary16 inputs exhaustive `from_*`); (5) for the **granular quire ops**
-> (`p_to_q`, `q_to_p`, `q_mul_add/sub`, `q_add/sub_p`, `q_add/sub_q`,
-> `q_negate`), an exact big-integer model of the 16n-bit accumulator (thousands
-> of random op sequences, per-step word comparison) plus the Hoon
-> `test-quire-rpb` vectors. **The vere vendoring + jets are next.**
+> an edge grid; (3) a from-scratch **100k+-case vector corpus** for the
+> transcendentals (`tools/gen_cheb_vectors.py` + `tools/cheb_check.c`, linked
+> directly against the C ABI) against `libmath/tools/unum_cheb_check.py`'s
+> mpmath-verified reference; (4) **numpy** as the IEEE reference for the
+> conversions (posit8 exhaustive `to_*`; all 65,536 binary16 inputs exhaustive
+> `from_*`); (5) for the **granular quire ops** (`p_to_q`, `q_to_p`,
+> `q_mul_add/sub`, `q_add/sub_p`, `q_add/sub_q`, `q_negate`), an exact
+> big-integer model of the 16n-bit accumulator (thousands of random op
+> sequences, per-step word comparison) plus the Hoon `test-quire-rpb` vectors.
+> **The vere vendoring + jets are next.**
 
 ## Standard, not legacy
 
@@ -69,7 +77,29 @@ posit32's `add` can shift a significand to a common exponent by ~240 bits
 wide multiply or division) is needed there. posit16 and posit32 share one
 generic algorithm (`src/posit/pcore.h`) instantiated per width; posit8 keeps its
 own `__int128` copy (`p8.c`) as the readable reference. Still per-width native
-fixed-size integers, no general/heap bignum.
+fixed-size integers, no general/heap bignum — for the **core** ops. The
+transcendentals are the one exception; see below.
+
+## Arbitrary precision for the transcendentals
+
+`/lib/unum`'s Hoon transcendentals decode a posit once, then do **exact
+(never-rounded)** arithmetic on a `[sign exponent significand]` triple,
+rounding only once at the end — this is *why* they're correctly rounded.
+Because Hoon `@` atoms are arbitrary precision, a Horner-chain-accumulated
+significand (e.g. `log`'s degree-16 polynomial) can grow to thousands of
+bits with no intermediate truncation. The fixed-width `wide_t`/`__int128`
+used by the core ops can't stand in for that without truncating mid-
+computation — a different algorithm needing its own precision-margin proof.
+So `src/posit/pgmp.h` gives the transcendentals their own arbitrary-precision
+`gval_t` (via `libgmp`, an existing precedent in this codebase's sibling
+`/lib/twoc` jets) mirroring Hoon's `+gmul`/`+gadd`/`+gneg`/`+gsub`/`+gdiv`/
+`+gpoly`/`+g-round`/`+glt`/`+bit` line for line, plus a GMP `g_bit()` (the
+arbitrary-precision `+bit`) used to round exactly once at the very end —
+`src/posit/ptrans.h` is the transliteration of each transcendental arm.
+Performance is secondary here (transcendentals are already the slow path);
+bit-exact correspondence to the Hoon is what matters. The core ops
+(add/sub/mul/div/fma/sqrt/quire/IEEE-754) are untouched by this and remain
+pure fixed-width native integers.
 
 ## Build & test
 
@@ -80,22 +110,28 @@ make test                  # exhaustive bit-exactness vs SoftPosit pX2
 
 `make test` needs the `softposit` pip package (the `pX2` es=2 oracle) — the same
 oracle `/lib/unum` was validated against. Point `ORACLE_PY` at a Python that has
-it (default `/opt/anaconda3/bin/python`).
+it (default `/opt/anaconda3/bin/python`). Building needs `libgmp` (the
+transcendentals' arbitrary-precision g-layer, see above) — point `GMP_PREFIX`
+at its install prefix if it's not at `/opt/homebrew` (its Homebrew location on
+Apple Silicon).
 
 ## Layout
 
 ```
-include/softunum.h     public API (raw-bit posit types + prototypes)
-src/posit/p8.c         posit8 (posit<8,2>) -- __int128 reference copy
-src/posit/pwide.h      fixed 512-bit integer (shift/add/sub/cmp/mask/isqt)
-src/posit/pcore.h      generic posit<N,2> core, instantiated per width
-src/posit/p16.c        posit16 (posit<16,2>)  =  #define PW_N 16 + pcore.h
-src/posit/p32.c        posit32 (posit<32,2>)  =  #define PW_N 32 + pcore.h
-src/posit/ptrans.h     elementary/transcendental functions (shared body)
-src/posit/pieee.h      IEEE-754 binary{16,32,64,128} codec (shared)
-tools/oracle.py        ctypes harness: SoftUnum vs SoftPosit (pX2 / p32)
-tools/hoon_vectors.py  ctypes harness: SoftUnum vs /lib/unum Hoon vectors
-tools/ieee_check.py    ctypes harness: conversions vs numpy + exact value
+include/softunum.h        public API (raw-bit posit types + prototypes)
+src/posit/p8.c            posit8 (posit<8,2>) -- __int128 reference copy
+src/posit/pwide.h         fixed 512-bit integer (shift/add/sub/cmp/mask/isqt)
+src/posit/pcore.h         generic posit<N,2> core, instantiated per width
+src/posit/p16.c           posit16 (posit<16,2>)  =  #define PW_N 16 + pcore.h
+src/posit/p32.c           posit32 (posit<32,2>)  =  #define PW_N 32 + pcore.h
+src/posit/pgmp.h          arbitrary-precision g-layer (GMP) for the transcendentals
+src/posit/ptrans.h        elementary/transcendental functions (shared body)
+src/posit/pieee.h         IEEE-754 binary{16,32,64,128} codec (shared)
+tools/oracle.py           ctypes harness: SoftUnum vs SoftPosit (pX2 / p32)
+tools/hoon_vectors.py     ctypes harness: SoftUnum vs /lib/unum Hoon vectors
+tools/gen_cheb_vectors.py generates a large transcendental vector corpus (vs unum_cheb_check.py)
+tools/cheb_check.c        C harness: SoftUnum (linked directly) vs the vector corpus
+tools/ieee_check.py       ctypes harness: conversions vs numpy + exact value
 tools/quire_check.py   ctypes harness: quire ops vs an exact big-int model
 ```
 

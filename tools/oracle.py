@@ -17,6 +17,41 @@ try:
 except ImportError:
     sys.exit("need the `softposit` pip package (the pX2 oracle)")
 
+#  The transcendentals are now bit-exact range-reduced Chebyshev-minimax/
+#  exact-Taylor kernels (see numerics NEXT-STEPS.md item #4), not the old
+#  naive fixed-term-count series -- so run_trans() below delegates to
+#  libmath/tools/unum_cheb_check.py, the mpmath-verified Python model that
+#  IS the algorithm-of-record (the same one the Hoon /lib/unum rewrite and
+#  tools/gen_cheb_vectors.py/cheb_check.c were checked against), rather than
+#  re-deriving a third independent transliteration of exp/log/sin/cos/tan/
+#  atan/asin/acos here.  pow/cbrt/pow_n/factorial are unchanged algorithmically
+#  (pow/cbrt just compose the new exp/log; pow_n/factorial never touched
+#  exp/log), so they stay as direct SoftPosit-op compositions below.
+sys.path.insert(0, os.path.expanduser("~/urbit/numerics/libmath/tools"))
+import mpmath as _mp
+_mp.mp.dps = 60
+import unum_cheb_check as _ucc
+
+#  NB: exp_g (g-triple re-simulation), NOT exp_ref/exp_exact -- exp_exact
+#  materializes `Fraction(2) ** k` exactly, which explodes (an integer with
+#  >10^16 bits) once k is large, i.e. for posit16/32 inputs anywhere near
+#  maxpos.  exp_g never materializes 2^k (k is folded only into the final
+#  encode() exponent, exactly like /lib/unum's +exp and this project's own
+#  g_bit/ll_add_clamp) and is verified to agree with exp_ref wherever the
+#  latter is actually tractable -- see gen_cheb_vectors.py's sanity check.
+_EXP_COEFFS = _ucc.gen_exp_coeffs(7)
+_EXP_COEFFS_G = [(True, -128, _ucc.raw128(c)) for c in reversed(_EXP_COEFFS)]
+_ucc.LOG_COEFFS = _ucc.gen_log_coeffs(16)
+_ucc.SIN_COEFFS, _ucc.COS_COEFFS = _ucc.gen_sincos_coeffs(6)
+_ucc.PI2_G = (True, -_ucc.TRIG_WBITS, _ucc.raw_w(_ucc.PI2, _ucc.TRIG_WBITS))
+_ucc.INVPI2_G = (True, -_ucc.TRIG_WBITS, _ucc.raw_w(_ucc.INVPI2, _ucc.TRIG_WBITS))
+_ucc.ATAN_COEFFS = _ucc.gen_atan_coeffs(13)
+_ucc.BP_ANGLES = [(True, 0, 0),
+                  (True, -128, _ucc.raw128(_ucc.quant(_mp.atan(_mp.mpf(1) / 2)))),
+                  (True, -128, _ucc.raw128(_ucc.quant(_mp.pi / 4))),
+                  (True, -128, _ucc.raw128(_ucc.quant(_mp.atan(_mp.mpf(3) / 2)))),
+                  (True, -128, _ucc.raw128(_ucc.quant(_mp.pi / 2)))]
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, "..", "libsoftunum.dylib")
 if not os.path.exists(LIB):
@@ -100,29 +135,22 @@ def run_trans(n):
               "invsqrt2": encode(False, -52, 0x0b504f333f9de6, n),
               "ln2": LN2, "invln2": encode(False, -52, 0x171547652b82fe, n), "ln10": LN10}
 
-    def r_exp(x):
-        s = t = ONE
-        for k in range(1, 21): t = MUL(t, DIV(x, SUN(k))); s = ADD(s, t)
-        return s
-    def r_sin(x):
-        t = s = x; x2 = MUL(x, x)
-        for nn in range(1, 21):
-            k = 2 * nn; t = NEG(MUL(t, DIV(x2, MUL(SUN(k), SUN(k + 1))))); s = ADD(s, t)
-        return s
-    def r_cos(x):
-        t = s = ONE; x2 = MUL(x, x)
-        for nn in range(1, 21):
-            k = 2 * nn; t = NEG(MUL(t, DIV(x2, MUL(SUN(k - 1), SUN(k))))); s = ADD(s, t)
-        return s
-    def r_tan(x): return DIV(r_sin(x), r_cos(x))
-    def r_log(x):
-        if LE(x, 0): return nar
-        y = DIV(SUB(x, ONE), ADD(x, ONE)); y2 = MUL(y, y); s = t = y
-        for nn in range(1, 31):
-            t = MUL(t, y2); s = ADD(s, MUL(DIV(ONE, SUN(2 * nn + 1)), t))
-        return MUL(SUN(2), s)
-    def r_log2(x): return DIV(r_log(x), LN2)
-    def r_log10(x): return DIV(r_log(x), LN10)
+    #  Delegate the range-reduced kernels to unum_cheb_check.py (see the
+    #  module-level comment above) -- the same mpmath-verified model the
+    #  Hoon rewrite and the C `cheb_check` harness were checked against.
+    def r_exp(x):  return _ucc.exp_g(x, n, _EXP_COEFFS_G)
+    def r_sin(x):  return _ucc.sin_g(x, n)
+    def r_cos(x):  return _ucc.cos_g(x, n)
+    def r_tan(x):  return _ucc.tan_g(x, n)
+    def r_log(x):  return _ucc.log_g(x, n)
+    def r_log2(x): return _ucc.log2_g(x, n)
+    def r_log10(x): return _ucc.log10_g(x, n)
+    def r_atan(x): return _ucc.atan_g(x, n)
+    def r_asin(x): return _ucc.asin_g(x, n)
+    def r_acos(x): return _ucc.acos_g(x, n)
+    #  pow/cbrt are unchanged algorithmically (mirrors /lib/unum's ++pow =
+    #  `(exp (mul y (log x)))`, ++cbrt = `(pow x (div one (sun 3)))`) -- just
+    #  now composed from the new r_exp/r_log above.
     def r_pow(x, y): return r_exp(MUL(y, r_log(x)))
     def r_pow_n(x, p):
         if x == nar: return nar
@@ -139,26 +167,6 @@ def run_trans(n):
         if x == 0: return 0
         if LT(x, 0): return nar
         return r_pow(x, DIV(ONE, SUN(3)))
-    def r_atan(x):
-        if x == nar: return nar
-        rt = SQT(ADD(ONE, MUL(x, x))); a = DIV(ONE, rt); b = ONE
-        for _ in range(41):
-            ai = MUL(DIV(ONE, SUN(2)), ADD(a, b)); b = SQT(MUL(ai, b)); a = ai
-        return DIV(x, MUL(rt, b))
-    def r_asin(x):
-        if x == nar: return nar
-        if LT(ABS(x), ONE): return r_atan(DIV(x, SQT(SUB(ONE, MUL(x, x)))))
-        if EQ(x, ONE): return MUL(PI, DIV(ONE, SUN(2)))
-        if EQ(x, NEG(ONE)): return NEG(MUL(PI, DIV(ONE, SUN(2))))
-        return nar
-    def r_acos(x):
-        if x == nar: return nar
-        if LT(ABS(x), ONE):
-            if EQ(x, 0): return MUL(PI, DIV(ONE, SUN(2)))
-            return r_atan(DIV(SQT(SUB(ONE, MUL(x, x))), x))
-        if EQ(x, ONE): return 0
-        if EQ(x, NEG(ONE)): return PI
-        return nar
     #  NB: factorial is excluded from the random sweep -- its naive loop
     #  (while x>1: x-=1) does not terminate for large x (huge-1 rounds back to
     #  huge in posit arithmetic), exactly as in /lib/unum.  It is checked below

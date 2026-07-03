@@ -367,4 +367,6 @@ static uint32_t pconst(long long e, uint64_t a) {
 }
 
 #define PW_PREFIX p8
+//  Bridge from this file's u128-backed up_t.a into the GMP g-layer (pgmp.h).
+#define UP_TO_GVAL(u) gval_from_u128((u).sign, (u).e, (u).a)
 #include "ptrans.h"
